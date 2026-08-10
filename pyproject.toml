@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "replaysafe"
+version = "0.1.0"
+description = "Deterministic static analysis for data-pipeline recoverability"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "ReplaySafe contributors" }]
+keywords = ["airflow", "dbt", "sql", "static-analysis", "data-engineering"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "click>=8.1,<9",
+  "PyYAML>=6.0,<7",
+  "sqlglot>=26,<29",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.15,<2",
+  "pytest>=8.3,<9",
+  "ruff>=0.11,<1",
+  "types-PyYAML>=6.0.12",
+]
+
+[project.scripts]
+replaysafe = "replaysafe.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/replaysafe/replaysafe"
+Issues = "https://github.com/replaysafe/replaysafe/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["replaysafe"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["replaysafe"]
+warn_unused_ignores = true

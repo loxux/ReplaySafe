@@ -1,0 +1,24 @@
+name: New recovery pattern
+description: Propose a deterministic retry/replay hazard
+title: "[pattern] "
+labels: ["pattern-request"]
+body:
+  - type: textarea
+    id: unsafe
+    attributes:
+      label: Minimal unsafe example
+    validations:
+      required: true
+  - type: textarea
+    id: failure
+    attributes:
+      label: Concrete failure sequence
+    validations:
+      required: true
+  - type: textarea
+    id: safe
+    attributes:
+      label: Safe and ambiguous variants
+    validations:
+      required: true
+

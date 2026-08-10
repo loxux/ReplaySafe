@@ -1,0 +1,11 @@
+version: 1
+dialect: auto
+fail_on: high
+exclude:
+  - "tests/**"
+  - "examples/unsafe_airflow/**"
+  - ".venv/**"
+rules:
+  RS014:
+    enabled: false
+

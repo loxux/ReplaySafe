@@ -1,0 +1,31 @@
+unsafe.sql
+RS002 HIGH  Retry-unsafe blind append
+  line 1: INSERT INTO analytics.events SELECT * FROM staged_events WHERE event_date = CURRENT_DATE
+  Append to analytics.events has no visible replay guard.
+  Failure scenario:
+  1. The database commits the appended rows.
+  2. The worker fails before the orchestrator records success.
+  3. The orchestrator retries the same task input.
+  4. The same rows are appended again.
+  Potential consequence: Duplicate rows can be introduced in analytics.events.
+  Suggested remediation:
+  - Use MERGE/UPSERT with a stable business key.
+  - Use atomic partition overwrite where supported.
+  - Use a visible uniqueness constraint with conflict handling.
+  Confidence: HIGH
+
+RS001 HIGH  Wall-clock dependency
+  line 4:20: CURRENT_DATE
+  Physical execution time controls which business rows are selected.
+  Failure scenario:
+  1. A historical interval is selected for replay.
+  2. The task executes on a later physical date.
+  3. CURRENT_DATE evaluates to the later date.
+  4. The task reads a different business interval than the replay requested.
+  Potential consequence: Historical replay can read or write the wrong business period.
+  Suggested remediation:
+  - Pass an explicit logical interval/start-end parameter into the query.
+  Confidence: HIGH
+
+Scanned 1 files (1 SQL, 0 Python).
+Scan result: 2 finding(s), 2 high/critical.

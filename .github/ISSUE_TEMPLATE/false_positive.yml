@@ -1,0 +1,31 @@
+name: False positive
+description: Report safe code accused by an existing rule
+title: "[false positive] "
+labels: ["false-positive"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ReplaySafe version
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: Rule ID
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal safe example
+      description: Remove credentials and proprietary identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: guarantee
+    attributes:
+      label: Why retries/replays are safe
+    validations:
+      required: true
+
