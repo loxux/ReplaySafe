@@ -9,7 +9,15 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from replaysafe.config import ReplaySafeConfig
-from replaysafe.ir import Confidence, Evidence, Finding, PipelineModel, Severity, SourceLocation
+from replaysafe.ir import (
+    AssetDefinition,
+    Confidence,
+    Evidence,
+    Finding,
+    PipelineModel,
+    Severity,
+    SourceLocation,
+)
 
 _SECRET_PATTERNS = (
     re.compile(r"(?i)(password|passwd|token|secret|api[_-]?key)\s*[:=]\s*(['\"]?)[^\s,'\";]+"),
@@ -36,6 +44,24 @@ class AnalysisContext:
     """Validated repository-owned metadata available to pure rules."""
 
     config: ReplaySafeConfig
+    asset_definitions: tuple[AssetDefinition, ...] = ()
+
+    def asset_definition(self, name: str) -> AssetDefinition | None:
+        """Resolve an exact or unambiguous partially qualified asset declaration."""
+
+        normalized = name.lower()
+        exact = [item for item in self.asset_definitions if item.asset.name == normalized]
+        if len(exact) == 1:
+            return exact[0]
+        if "." not in normalized:
+            suffix = [
+                item
+                for item in self.asset_definitions
+                if item.asset.name.rsplit(".", 1)[-1] == normalized
+            ]
+            if len(suffix) == 1:
+                return suffix[0]
+        return None
 
 
 class Rule(Protocol):

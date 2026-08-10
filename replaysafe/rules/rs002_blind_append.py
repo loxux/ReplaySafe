@@ -28,11 +28,20 @@ class BlindAppendRule:
                 if write.mode != WriteMode.APPEND or write.conflict_handling:
                     continue
                 metadata = context.config.asset(write.target.name)
+                definition = context.asset_definition(write.target.name)
                 guarded_by_delete = any(
                     item.mode == WriteMode.DELETE and is_replacement_pair(task, item, write)
                     for item in writes
                 )
-                if metadata.duplicate_tolerant or guarded_by_delete:
+                safe_modes = {WriteMode.UPSERT, WriteMode.MERGE, WriteMode.OVERWRITE}
+                configured_non_append = metadata.write_semantics in safe_modes
+                inferred_non_append = definition is not None and definition.write_mode in safe_modes
+                if (
+                    metadata.duplicate_tolerant
+                    or guarded_by_delete
+                    or configured_non_append
+                    or inferred_non_append
+                ):
                     continue
                 if model.materialization == "incremental" and (
                     model.unique_key or metadata.unique_key

@@ -2,6 +2,7 @@
 
 from replaysafe.ir.enums import Confidence, Severity, TimeDependencyKind, WriteMode
 from replaysafe.ir.model import (
+    AssetDefinition,
     DataAsset,
     Evidence,
     ExternalSideEffect,
@@ -22,6 +23,7 @@ from replaysafe.ir.model import (
 )
 
 __all__ = [
+    "AssetDefinition",
     "Confidence",
     "DataAsset",
     "Evidence",

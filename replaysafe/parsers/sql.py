@@ -11,6 +11,7 @@ from sqlglot.errors import SqlglotError
 
 from replaysafe.diagnostics import Diagnostic
 from replaysafe.ir import (
+    AssetDefinition,
     DataAsset,
     Pagination,
     Predicate,
@@ -47,6 +48,7 @@ class SqlAnalysis:
     statements: tuple[StatementSemantics, ...]
     transaction_groups: tuple[TransactionGroup, ...]
     diagnostics: tuple[Diagnostic, ...]
+    asset_definitions: tuple[AssetDefinition, ...] = ()
 
 
 def _split_statements(sql: str) -> list[tuple[str, int]]:
@@ -166,6 +168,53 @@ def _table_name(table: exp.Table) -> str:
 
 def _asset(table: exp.Table, dialect: str) -> DataAsset:
     return DataAsset(_table_name(table), "table", None if dialect == "auto" else dialect)
+
+
+def _same_asset(left: str, right: str) -> bool:
+    """Match exact names, or an unqualified name against a qualified one."""
+
+    if left == right:
+        return True
+    return ("." not in left or "." not in right) and left.rsplit(".", 1)[-1] == right.rsplit(
+        ".", 1
+    )[-1]
+
+
+def _table_definition(
+    statement: exp.Expression,
+    text: str,
+    dialect: str,
+    location: SourceLocation,
+) -> AssetDefinition | None:
+    """Extract StarRocks Primary Key Model semantics from CREATE TABLE."""
+
+    if (
+        not isinstance(statement, exp.Create)
+        or str(statement.args.get("kind", "")).upper() != "TABLE"
+    ):
+        return None
+    starrocks_ddl = dialect == "starrocks" or bool(
+        re.search(
+            r"\bPRIMARY\s+KEY\s*\([^)]*\).*\bDISTRIBUTED\s+BY\b", text, re.IGNORECASE | re.DOTALL
+        )
+    )
+    if not starrocks_ddl:
+        return None
+    primary_key = statement.find(exp.PrimaryKey)
+    if primary_key is None:
+        return None
+    target = (
+        statement.this if isinstance(statement.this, exp.Table) else statement.this.find(exp.Table)
+    )
+    if target is None:
+        return None
+    keys = tuple(
+        str(getattr(item, "name", None) or item.sql(dialect=None)).lower()
+        for item in primary_key.expressions
+    )
+    if not keys:
+        return None
+    return AssetDefinition(_asset(target, dialect), keys, WriteMode.UPSERT, location)
 
 
 def _integer(expression: exp.Expression | None) -> int | None:
@@ -372,6 +421,92 @@ def _time_dependencies(
     return tuple(dependencies)
 
 
+def _correlates_target(expression: exp.Expression, target_aliases: set[str]) -> bool:
+    """Return whether an equality links a target alias to a different relation."""
+
+    for equality in expression.find_all(exp.EQ):
+        qualifiers = {
+            str(column.table).lower() for column in equality.find_all(exp.Column) if column.table
+        }
+        if qualifiers & target_aliases and qualifiers - target_aliases:
+            return True
+    return False
+
+
+def _required_conjunct(node: exp.Expression, root: exp.Expression) -> bool:
+    """Reject a candidate guard that can be bypassed through an OR branch."""
+
+    current: exp.Expr | None = node
+    while current is not None and current is not root:
+        current = current.parent
+        if isinstance(current, exp.Or):
+            return False
+    return current is root
+
+
+def _has_left_anti_join(query: exp.Expression, target_name: str) -> bool:
+    """Recognize LEFT JOIN target ... WHERE target.key IS NULL."""
+
+    where = query.args.get("where")
+    if not isinstance(where, exp.Where):
+        return False
+    joins = query.args.get("joins") or ()
+    for join in joins:
+        if not isinstance(join, exp.Join) or str(join.args.get("side", "")).upper() != "LEFT":
+            continue
+        table = join.this if isinstance(join.this, exp.Table) else join.this.find(exp.Table)
+        if table is None or not _same_asset(_table_name(table), target_name):
+            continue
+        target_alias = str(table.alias_or_name).lower()
+        on = join.args.get("on")
+        if not isinstance(on, exp.Expression) or not _correlates_target(on, {target_alias}):
+            continue
+        for predicate in where.this.find_all(exp.Is):
+            column = predicate.this
+            if (
+                isinstance(column, exp.Column)
+                and isinstance(predicate.expression, exp.Null)
+                and str(column.table).lower() == target_alias
+                and _required_conjunct(predicate, where.this)
+            ):
+                return True
+    return False
+
+
+def _has_not_exists_guard(query: exp.Expression, target_name: str) -> bool:
+    """Recognize a correlated NOT EXISTS probe against the insert target."""
+
+    where = query.args.get("where")
+    if not isinstance(where, exp.Where):
+        return False
+    for negation in where.this.find_all(exp.Not):
+        exists = negation.this
+        if not isinstance(exists, exp.Exists) or not isinstance(exists.this, exp.Expression):
+            continue
+        subquery = exists.this
+        target_aliases = {
+            str(table.alias_or_name).lower()
+            for table in subquery.find_all(exp.Table)
+            if _same_asset(_table_name(table), target_name)
+        }
+        subquery_where = subquery.args.get("where")
+        if (
+            target_aliases
+            and isinstance(subquery_where, exp.Where)
+            and _correlates_target(subquery_where.this, target_aliases)
+            and _required_conjunct(negation, where.this)
+        ):
+            return True
+    return False
+
+
+def _has_insert_guard(statement: exp.Insert, target_name: str) -> bool:
+    query = statement.args.get("expression")
+    return isinstance(query, exp.Expression) and (
+        _has_left_anti_join(query, target_name) or _has_not_exists_guard(query, target_name)
+    )
+
+
 def _write_operation(
     statement: exp.Expression,
     text: str,
@@ -396,6 +531,8 @@ def _write_operation(
         conflict = bool(statement.args.get("conflict")) or bool(
             re.search(r"\bON\s+CONFLICT\b|\bON\s+DUPLICATE\s+KEY\b", upper)
         )
+        if target is not None:
+            conflict = conflict or _has_insert_guard(statement, _table_name(target))
         mode = (
             WriteMode.OVERWRITE
             if overwrite
@@ -485,6 +622,7 @@ class SqlAnalyzer:
         statements: list[StatementSemantics] = []
         diagnostics: list[Diagnostic] = []
         groups: list[TransactionGroup] = []
+        asset_definitions: list[AssetDefinition] = []
         active_group: str | None = None
         active_indexes: list[int] = []
         group_location: SourceLocation | None = None
@@ -504,6 +642,9 @@ class SqlAnalyzer:
                 )
                 continue
             kind = _statement_kind(parsed, text)
+            definition = _table_definition(parsed, text, dialect, location)
+            if definition is not None:
+                asset_definitions.append(definition)
             if kind == "begin":
                 active_group = f"tx-{index}"
                 active_indexes = []
@@ -581,4 +722,9 @@ class SqlAnalyzer:
                 )
                 normalized.append(replace(item, operations=operations))
             statements = normalized
-        return SqlAnalysis(tuple(statements), tuple(groups), tuple(diagnostics))
+        return SqlAnalysis(
+            tuple(statements),
+            tuple(groups),
+            tuple(diagnostics),
+            tuple(asset_definitions),
+        )

@@ -1,4 +1,4 @@
-# ReplaySafe v0.1 precision report
+# ReplaySafe precision report
 
 The release target is at least 90% precision for blocking findings on a manually reviewed corpus. This repository establishes deterministic regression boundaries; it does not claim that a broad public-repository validation study has already been completed.
 
@@ -10,7 +10,7 @@ Assumption: only predicates affect business-row selection. Safe negatives includ
 
 ### RS002
 
-Assumption: an ordinary insert is append unless the statement or explicit metadata proves otherwise. Safe negatives include MERGE, insert overwrite, conflict handling, transactional delete/insert, non-transactional delete/insert delegated to RS004, and explicitly duplicate-tolerant assets. Unique constraints not present in code/config are deliberately unknown.
+Assumption: an ordinary insert is append unless the statement, repository-visible DDL, or explicit metadata proves otherwise. Safe negatives include MERGE, insert overwrite, conflict handling, correlated target anti-joins, transactional delete/insert, non-transactional delete/insert delegated to RS004, StarRocks Primary Key Model targets, configured non-append write semantics, and explicitly duplicate-tolerant assets. Uncorrelated existence checks and joins against unrelated tables are not accepted as replay guards. Runtime constraints absent from code/config remain deliberately unknown.
 
 ### RS003
 
@@ -22,7 +22,7 @@ Assumption: operation order and target identity are clear within one inferred ta
 
 ### RS006
 
-Assumption: any present `ORDER BY` is sufficient evidence for v0.1. Safe negatives include LIMIT-only sampling, ordered offset, keyset pagination, no pagination, ordered dynamic limits, and window ordering unrelated to an offset-free query.
+Assumption: any present `ORDER BY` is sufficient evidence. Safe negatives include LIMIT-only sampling, ordered offset, keyset pagination, no pagination, ordered dynamic limits, and window ordering unrelated to an offset-free query.
 
 ### RS008
 
@@ -37,7 +37,7 @@ Assumption: the window alias is proven to be filtered to survivor position 1. Sa
 - SQL embedded through arbitrary Python control/data flow is not resolved.
 - SQLGlot dialect coverage is bounded by the tested constructs and versions in `pyproject.toml`.
 - Transaction wrappers implemented in custom Python libraries are not inferred.
-- Runtime schema constraints and warehouse-specific atomicity are unknown unless represented in config/dbt metadata.
+- Runtime schema constraints and warehouse-specific atomicity are unknown unless represented in config, dbt metadata, or scanned StarRocks Primary Key DDL.
 - ReplaySafe never executes dbt macro expansion. When `target/manifest.json` is available it analyzes dbt's already-generated compiled SQL; otherwise only non-executing Jinja placeholder handling is available. Compiled macro expansion can make reported source line locations approximate.
 - RS014 remains disabled because generic external-call precision needs a larger corpus.
 

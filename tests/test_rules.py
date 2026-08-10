@@ -4,6 +4,7 @@ import pytest
 
 from replaysafe.analysis import scan_repository
 from replaysafe.config import AssetMetadata, ReplaySafeConfig, RuleOverride
+from replaysafe.ir import WriteMode
 
 
 def scan_sql(
@@ -66,6 +67,59 @@ def test_rs002_explicit_duplicate_tolerance(tmp_path: Path) -> None:
         assets={"dst": AssetMetadata(append_only=True, duplicate_tolerant=True)}
     )
     assert scan_sql(tmp_path, "INSERT INTO dst SELECT * FROM src", "RS002", config) == []
+
+
+def test_rs002_anti_join_guards(tmp_path: Path) -> None:
+    guarded = (
+        "INSERT INTO dst SELECT s.* FROM src s "
+        "LEFT JOIN dst existing ON existing.id = s.id WHERE existing.id IS NULL"
+    )
+    assert scan_sql(tmp_path, guarded, "RS002") == []
+
+
+def test_rs002_starrocks_primary_key_catalog_across_files(tmp_path: Path) -> None:
+    (tmp_path / "schema.sql").write_text(
+        "CREATE TABLE analytics.kraken (p_key BIGINT, value STRING) "
+        "PRIMARY KEY (p_key) DISTRIBUTED BY HASH(p_key)",
+        encoding="utf-8",
+    )
+    (tmp_path / "merge.sql").write_text(
+        "INSERT INTO analytics.kraken SELECT * FROM staging.kraken",
+        encoding="utf-8",
+    )
+    config = ReplaySafeConfig(dialect="starrocks")
+    result = scan_repository(tmp_path, config, selected_rules=frozenset({"RS002"}))
+    assert result.findings == ()
+
+
+def test_rs002_ambiguous_unqualified_primary_key_target_stays_visible(tmp_path: Path) -> None:
+    (tmp_path / "schemas.sql").write_text(
+        "CREATE TABLE first.orders (id BIGINT) PRIMARY KEY (id) DISTRIBUTED BY HASH(id);"
+        "CREATE TABLE second.orders (id BIGINT) PRIMARY KEY (id) DISTRIBUTED BY HASH(id)",
+        encoding="utf-8",
+    )
+    (tmp_path / "load.sql").write_text(
+        "INSERT INTO orders SELECT * FROM staging.orders",
+        encoding="utf-8",
+    )
+    config = ReplaySafeConfig(dialect="starrocks")
+    result = scan_repository(tmp_path, config, selected_rules=frozenset({"RS002"}))
+    assert [finding.rule_id for finding in result.findings] == ["RS002"]
+
+
+def test_rs002_configured_upsert_semantics(tmp_path: Path) -> None:
+    config = ReplaySafeConfig(
+        assets={"analytics.kraken": AssetMetadata(write_semantics=WriteMode.UPSERT)}
+    )
+    assert (
+        scan_sql(
+            tmp_path,
+            "INSERT INTO analytics.kraken SELECT * FROM staging.kraken",
+            "RS002",
+            config,
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize(

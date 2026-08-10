@@ -65,3 +65,52 @@ def test_explicit_transaction_group() -> None:
     ]
     assert len(result.transaction_groups) == 1
     assert writes_found[0].transactional_group == writes_found[1].transactional_group
+
+
+def test_insert_anti_join_guards_are_conflict_handling() -> None:
+    left_join = writes(
+        "INSERT INTO dst SELECT s.* FROM src s "
+        "LEFT JOIN dst existing ON existing.id = s.id WHERE existing.id IS NULL"
+    )[0]
+    not_exists = writes(
+        "INSERT INTO dst SELECT * FROM src s WHERE NOT EXISTS "
+        "(SELECT 1 FROM dst existing WHERE existing.id = s.id)"
+    )[0]
+    assert left_join.conflict_handling
+    assert not_exists.conflict_handling
+
+
+def test_unrelated_or_uncorrelated_anti_joins_are_not_guards() -> None:
+    unrelated = writes(
+        "INSERT INTO dst SELECT s.* FROM src s "
+        "LEFT JOIN other existing ON existing.id = s.id WHERE existing.id IS NULL"
+    )[0]
+    uncorrelated = writes(
+        "INSERT INTO dst SELECT * FROM src s WHERE NOT EXISTS "
+        "(SELECT 1 FROM dst WHERE status = 'complete')"
+    )[0]
+    bypassable = writes(
+        "INSERT INTO dst SELECT s.* FROM src s "
+        "LEFT JOIN dst existing ON existing.id = s.id "
+        "WHERE existing.id IS NULL OR s.force_reload = 1"
+    )[0]
+    assert not unrelated.conflict_handling
+    assert not uncorrelated.conflict_handling
+    assert not bypassable.conflict_handling
+
+
+def test_starrocks_primary_key_definition_is_upsert() -> None:
+    result = analyze(
+        "CREATE TABLE analytics.kraken (p_key BIGINT, value STRING) "
+        "PRIMARY KEY (p_key) DISTRIBUTED BY HASH(p_key)",
+        "starrocks",
+    )
+    definition = result.asset_definitions[0]
+    assert definition.asset.name == "analytics.kraken"
+    assert definition.primary_key == ("p_key",)
+    assert definition.write_mode == WriteMode.UPSERT
+
+
+def test_postgres_primary_key_is_not_inferred_as_upsert() -> None:
+    result = analyze("CREATE TABLE dst (id BIGINT PRIMARY KEY)", "postgres")
+    assert result.asset_definitions == ()

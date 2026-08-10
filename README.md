@@ -51,6 +51,8 @@ ReplaySafe prefers no finding over a speculative blocking result. See [rule boun
 
 Dynamic Python assembly, arbitrary symbolic execution, runtime warehouse metadata, broad lineage catalogs, Spark plans, and generic data-quality checks remain intentionally outside the current scope.
 
+For RS002, ReplaySafe recognizes correlated `LEFT JOIN target ... WHERE target.key IS NULL` and `NOT EXISTS` insert guards. With the StarRocks dialect, it also indexes scanned `CREATE TABLE ... PRIMARY KEY (...)` declarations and treats inserts into those Primary Key Model tables as upserts. Schema declarations may live in a different scanned SQL file from the insert.
+
 ## dbt projects
 
 Scan a dbt project from its root:
@@ -88,12 +90,17 @@ assets:
   analytics.audit_log:
     append_only: true
     duplicate_tolerant: true
+  analytics.kraken:
+    write_semantics: upsert
+    unique_key: [p_key]
 suppressions:
   - rule: RS002
     file: dags/audit.py
     reason: "Warehouse DDL enforces an event ID outside this repository."
     expires: "2027-01-01"
 ```
+
+Use `write_semantics: upsert` when a warehouse table has native key-based replacement behavior but its DDL is not present in the scanned repository. Accepted values are `append`, `upsert`, `merge`, and `overwrite`.
 
 Inline exceptions apply to the following nearby statement and should explain the external guarantee:
 

@@ -8,7 +8,7 @@ Flags `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `NOW()`, `SYSDATE`, `GETDATE()` and e
 
 ## RS002 - Retry-unsafe blind append
 
-Flags an append where the same semantic task has no visible MERGE/upsert, overwrite, conflict handling, delete/insert replacement, dbt incremental unique key, or explicit duplicate-tolerant asset metadata. For manifest-backed dbt models, ReplaySafe also interprets `merge`, `delete+insert`, `insert_overwrite`, and `microbatch` strategies. ReplaySafe does not infer safety from destination names.
+Flags an append where the same semantic task has no visible MERGE/upsert, overwrite, conflict handling, delete/insert replacement, dbt incremental unique key, anti-join guard, or explicit safe asset metadata. Correlated `LEFT JOIN target ... WHERE target.key IS NULL` and `NOT EXISTS` probes count as guards. For manifest-backed dbt models, ReplaySafe interprets `merge`, `delete+insert`, `insert_overwrite`, and `microbatch` strategies. In StarRocks scans, a repository-visible `CREATE TABLE ... PRIMARY KEY (...)` declaration gives that target upsert semantics. Warehouse metadata outside the scan can be supplied with `assets.<name>.write_semantics: upsert`. ReplaySafe does not infer safety from destination names.
 
 ## RS003 - Target-derived unsafe watermark
 
@@ -20,7 +20,7 @@ Flags a clear same-task `DELETE` followed by append to the same target when no e
 
 ## RS006 - Unstable pagination
 
-Flags `OFFSET` when `ORDER BY` is absent. One-shot `LIMIT` without offset is not reported. The v0.1 rule does not speculate about whether a present ordering is unique.
+Flags `OFFSET` when `ORDER BY` is absent. One-shot `LIMIT` without offset is not reported. The rule does not speculate about whether a present ordering is unique.
 
 ## RS008 - Non-unique watermark without tie-breaker
 
@@ -32,4 +32,4 @@ Disabled by default. When enabled, flags an obvious HTTP POST inside a staticall
 
 ## RS017 - Non-deterministic deduplication
 
-Flags only proven survivor selection (`ROW_NUMBER` or `RANK`, partitioned by key and filtered to 1) without `ORDER BY`. An ordered window passes; v0.1 does not guess that a present ordering has ties.
+Flags only proven survivor selection (`ROW_NUMBER` or `RANK`, partitioned by key and filtered to 1) without `ORDER BY`. An ordered window passes; ReplaySafe does not guess that a present ordering has ties.

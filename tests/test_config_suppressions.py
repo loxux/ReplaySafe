@@ -14,14 +14,17 @@ def test_config_validation_and_manifest_types() -> None:
             "dialect": "postgres",
             "fail_on": "critical",
             "rules": {"RS002": {"severity": "medium"}},
-            "assets": {"dst": {"unique_key": "id"}},
+            "assets": {"dst": {"unique_key": "id", "write_semantics": "upsert"}},
         }
     )
     assert config.assets["dst"].unique_key == ("id",)
+    assert config.assets["dst"].write_semantics.value == "upsert"
     with pytest.raises(ConfigError, match="Unknown rule"):
         parse_config({"rules": {"RS999": {"enabled": True}}})
     with pytest.raises(ConfigError, match="reason"):
         parse_config({"suppressions": [{"rule": "RS002", "file": "x.sql"}]}, ci=True)
+    with pytest.raises(ConfigError, match="write_semantics"):
+        parse_config({"assets": {"dst": {"write_semantics": "magic"}}})
 
 
 def test_config_and_inline_suppressions(tmp_path: Path) -> None:

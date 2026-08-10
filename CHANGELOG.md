@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 - 2026-08-10
+
+- Recognize correlated `LEFT JOIN ... IS NULL` and `NOT EXISTS` target probes as idempotent insert guards.
+- Infer upsert semantics for StarRocks Primary Key tables declared in scanned SQL DDL.
+- Add `assets.<name>.write_semantics` overrides for warehouse metadata outside the repository.
+
 ## 0.2.1 - 2026-08-10
 
 - Refresh the PyPI project description to describe current dbt support without stale v0.1 labels.

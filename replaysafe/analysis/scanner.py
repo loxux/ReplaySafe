@@ -128,7 +128,10 @@ def scan_repository(
         models.append(model)
         diagnostics.extend(parser_diagnostics)
 
-    context = AnalysisContext(active_config)
+    context = AnalysisContext(
+        active_config,
+        tuple(definition for model in models for definition in model.asset_definitions),
+    )
     findings: list[Finding] = []
     for model in models:
         for rule in RULES:

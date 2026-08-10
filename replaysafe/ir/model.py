@@ -30,6 +30,16 @@ class DataAsset:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetDefinition:
+    """Repository-visible storage semantics for a declared data asset."""
+
+    asset: DataAsset
+    primary_key: tuple[str, ...] = ()
+    write_mode: WriteMode = WriteMode.UNKNOWN
+    location: SourceLocation | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Predicate:
     """A row-selection expression independent of the SQL parser AST."""
 
@@ -165,6 +175,7 @@ class PipelineModel:
     dbt_unique_id: str | None = None
     relation_name: str | None = None
     dependency_relations: tuple[str, ...] = ()
+    asset_definitions: tuple[AssetDefinition, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

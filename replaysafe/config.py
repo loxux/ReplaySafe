@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from replaysafe.ir import Severity
+from replaysafe.ir import Severity, WriteMode
 
 KNOWN_RULE_IDS = frozenset({"RS001", "RS002", "RS003", "RS004", "RS006", "RS008", "RS014", "RS017"})
 
@@ -34,6 +34,7 @@ class AssetMetadata:
     append_only: bool = False
     duplicate_tolerant: bool = False
     unique_key: tuple[str, ...] = ()
+    write_semantics: WriteMode | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,10 @@ rules:
   RS014:
     enabled: false
 # suppressions require an explicit reason in CI:
+# assets:
+#   analytics.orders:
+#     write_semantics: upsert
+#     unique_key: [order_id]
 # suppressions:
 #   - rule: RS002
 #     file: dags/audit.py
@@ -176,7 +181,30 @@ def parse_config(raw: Any, *, ci: bool = False) -> ReplaySafeConfig:
             unique_key = (unique,)
         else:
             unique_key = _strings(unique, f"assets.{name}.unique_key")
-        assets[name.lower()] = AssetMetadata(append_only, duplicate_tolerant, unique_key)
+        raw_semantics = item.get("write_semantics")
+        write_semantics: WriteMode | None = None
+        if raw_semantics is not None:
+            try:
+                write_semantics = WriteMode(str(raw_semantics).lower())
+            except ValueError as error:
+                raise ConfigError(
+                    f"assets.{name}.write_semantics must be append, upsert, merge, or overwrite."
+                ) from error
+            if write_semantics not in {
+                WriteMode.APPEND,
+                WriteMode.UPSERT,
+                WriteMode.MERGE,
+                WriteMode.OVERWRITE,
+            }:
+                raise ConfigError(
+                    f"assets.{name}.write_semantics must be append, upsert, merge, or overwrite."
+                )
+        assets[name.lower()] = AssetMetadata(
+            append_only,
+            duplicate_tolerant,
+            unique_key,
+            write_semantics,
+        )
 
     require_reason = bool(data.get("require_suppression_reason", ci))
     suppressions: list[ConfigSuppression] = []

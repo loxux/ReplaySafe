@@ -7,6 +7,7 @@ from dataclasses import replace
 
 from replaysafe.diagnostics import Diagnostic
 from replaysafe.ir import (
+    AssetDefinition,
     DataAsset,
     ExternalSideEffect,
     PipelineModel,
@@ -110,6 +111,7 @@ def build_sql_model(
         dbt_unique_id=dbt_node.unique_id if dbt_node else None,
         relation_name=dbt_node.relation_name if dbt_node else None,
         dependency_relations=dbt_node.dependency_relations if dbt_node else (),
+        asset_definitions=parsed.asset_definitions,
     )
     return model, parsed.diagnostics
 
@@ -195,6 +197,7 @@ def build_python_model(
         locations.setdefault(matching, effect.location)
 
     tasks: list[TaskSemantics] = []
+    asset_definitions: list[AssetDefinition] = []
     all_keys = sorted(
         set(grouped_sql) | set(grouped_effects),
         key=lambda item: (item[0] or "", item[1] if item[1] is not None else -1),
@@ -212,6 +215,7 @@ def build_python_model(
                 index_offset=next_index,
             )
             diagnostics.extend(parsed.diagnostics)
+            asset_definitions.extend(parsed.asset_definitions)
             extracted_statements = parsed.statements
             if extracted.transaction_group:
                 extracted_statements = tuple(
@@ -242,4 +246,6 @@ def build_python_model(
                 effects=tuple(grouped_effects.get(key, [])),
             )
         )
-    return PipelineModel(file, tuple(tasks)), tuple(diagnostics)
+    return PipelineModel(file, tuple(tasks), asset_definitions=tuple(asset_definitions)), tuple(
+        diagnostics
+    )
