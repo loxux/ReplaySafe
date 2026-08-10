@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from typing import cast
 
 from sqlglot import exp, parse_one
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from replaysafe.diagnostics import Diagnostic
 from replaysafe.ir import (
@@ -35,6 +36,7 @@ _SURVIVOR_TEMPLATE = r"(?:\b{alias}\b\s*=\s*1|1\s*=\s*\b{alias}\b)"
 _SUPPORTED_DIALECTS = frozenset({"auto", "postgres", "snowflake", "bigquery", "starrocks"})
 _JINJA_EXPRESSION = re.compile(r"\{\{(?P<body>.*?)\}\}", re.DOTALL)
 _JINJA_BLOCK = re.compile(r"\{%.*?%\}", re.DOTALL)
+_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
 _PYTHON_PLACEHOLDER = re.compile(r"\{[^{}]+\}")
 
 
@@ -199,11 +201,11 @@ def _parse(text: str, dialect: str) -> exp.Expression:
         if dialect != "auto"
         else (None, "postgres", "snowflake", "bigquery", "starrocks")
     )
-    first_error: ParseError | None = None
+    first_error: SqlglotError | None = None
     for candidate in candidates:
         try:
-            return parse_one(text, read=candidate)
-        except ParseError as error:
+            return cast(exp.Expression, parse_one(text, read=candidate))
+        except SqlglotError as error:
             first_error = first_error or error
 
     def replace_jinja(match: re.Match[str]) -> str:
@@ -214,13 +216,14 @@ def _parse(text: str, dialect: str) -> exp.Expression:
             return "__replaysafe_relation"
         return "__replaysafe_parameter"
 
-    templated = _JINJA_BLOCK.sub(" ", _JINJA_EXPRESSION.sub(replace_jinja, text))
+    templated = _JINJA_COMMENT.sub(" ", text)
+    templated = _JINJA_BLOCK.sub(" ", _JINJA_EXPRESSION.sub(replace_jinja, templated))
     templated = _PYTHON_PLACEHOLDER.sub("__replaysafe_parameter", templated)
     if templated != text:
         for candidate in candidates:
             try:
-                return parse_one(templated, read=candidate)
-            except ParseError:
+                return cast(exp.Expression, parse_one(templated, read=candidate))
+            except SqlglotError:
                 pass
     assert first_error is not None
     raise first_error
@@ -490,7 +493,7 @@ class SqlAnalyzer:
             location = SourceLocation(context.file, context.start_line + statement_line - 1)
             try:
                 parsed = _parse(text, dialect)
-            except (ParseError, ValueError) as error:
+            except (SqlglotError, ValueError) as error:
                 diagnostics.append(
                     Diagnostic(
                         "SQL_PARSE_ERROR",

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from replaysafe.analysis import scan_repository
+from replaysafe.analysis.pipeline_builder import build_python_model
 from replaysafe.ir import SourceLocation
 from replaysafe.output import render_json, render_sarif, render_text
 from replaysafe.parsers.python import PythonAnalyzer
@@ -17,11 +18,39 @@ def test_wall_clock_dialect_coverage(dialect: str) -> None:
     assert result.statements[0].time_dependencies
 
 
-def test_dbt_jinja_relation_is_tolerated() -> None:
-    sql = "{{ config(materialized='incremental') }} SELECT * FROM {{ ref('events') }}"
+def test_dbt_jinja_relation_and_comment_are_tolerated() -> None:
+    sql = """
+{# This model intentionally uses a dbt-only helper. #}
+{{ config(materialized='incremental') }}
+SELECT * FROM {{ ref('events') }}
+"""
     result = SqlAnalyzer().analyze(sql, "auto", SourceLocation("models/events.sql", 1))
     assert not result.diagnostics
     assert result.statements
+
+
+def test_escaped_quote_uses_dialect_fallback_without_exception() -> None:
+    sql = "SELECT 'it\\'s' AS value;\nSELECT 1"
+    result = SqlAnalyzer().analyze(sql, "auto", SourceLocation("escaped.sql", 1))
+    assert len(result.statements) == 2
+    assert not result.diagnostics
+
+
+def test_sql_tokenizer_error_is_diagnostic_not_exception() -> None:
+    result = SqlAnalyzer().analyze("SELECT 'unterminated", "auto", SourceLocation("broken.sql", 1))
+    assert not result.statements
+    assert [item.code for item in result.diagnostics] == ["SQL_PARSE_ERROR"]
+
+
+def test_python_fstring_placeholder_reaches_sql_analysis_safely() -> None:
+    source = """
+account_name = get_account_name()
+sql = f"SELECT * FROM {account_name}.events"
+warehouse.execute(sql)
+"""
+    model, diagnostics = build_python_model(source, "dynamic.py", "auto")
+    assert not diagnostics
+    assert model.tasks[0].statements
 
 
 def test_classic_airflow_context() -> None:
