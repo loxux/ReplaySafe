@@ -83,7 +83,7 @@ def render_sarif(result: ScanResult) -> str:
                     "driver": {
                         "name": "ReplaySafe",
                         "semanticVersion": __version__,
-                        "informationUri": "https://github.com/replaysafe/replaysafe",
+                        "informationUri": "https://github.com/loxux/ReplaySafe",
                         "rules": rules,
                     }
                 },

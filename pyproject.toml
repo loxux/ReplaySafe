@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Deterministic static analysis for data-pipeline recoverability"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "ReplaySafe contributors" }]
 keywords = ["airflow", "dbt", "sql", "static-analysis", "data-engineering"]
 classifiers = [
@@ -36,8 +36,10 @@ dev = [
 replaysafe = "replaysafe.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/replaysafe/replaysafe"
-Issues = "https://github.com/replaysafe/replaysafe/issues"
+Homepage = "https://github.com/loxux/ReplaySafe"
+Repository = "https://github.com/loxux/ReplaySafe"
+Issues = "https://github.com/loxux/ReplaySafe/issues"
+Changelog = "https://github.com/loxux/ReplaySafe/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["replaysafe"]

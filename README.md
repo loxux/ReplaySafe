@@ -1,5 +1,9 @@
 # ReplaySafe
 
+[![CI](https://github.com/loxux/ReplaySafe/actions/workflows/ci.yml/badge.svg)](https://github.com/loxux/ReplaySafe/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/replaysafe.svg)](https://pypi.org/project/replaysafe/)
+[![Python](https://img.shields.io/pypi/pyversions/replaysafe.svg)](https://pypi.org/project/replaysafe/)
+
 ReplaySafe is a deterministic static analyzer for data pipelines that cannot safely retry, replay, backfill, partially fail, or run concurrently. The v0.1 scanner focuses on SQL plus statically extractable Python/Airflow and dbt-style SQL. It runs locally and never imports or executes scanned repository code.
 
 ## Five-minute quick start
