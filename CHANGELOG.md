@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-08-10
+
+- Refresh the PyPI project description to describe current dbt support without stale v0.1 labels.
+
 ## 0.2.0 - 2026-08-10
 
 - Auto-detect `target/manifest.json` when scanning a dbt project.
