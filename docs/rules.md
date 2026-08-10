@@ -8,7 +8,7 @@ Flags `CURRENT_DATE`, `CURRENT_TIMESTAMP`, `NOW()`, `SYSDATE`, `GETDATE()` and e
 
 ## RS002 - Retry-unsafe blind append
 
-Flags an append where the same semantic task has no visible MERGE/upsert, overwrite, conflict handling, delete/insert replacement, dbt incremental unique key, or explicit duplicate-tolerant asset metadata. ReplaySafe does not infer safety from destination names.
+Flags an append where the same semantic task has no visible MERGE/upsert, overwrite, conflict handling, delete/insert replacement, dbt incremental unique key, or explicit duplicate-tolerant asset metadata. For manifest-backed dbt models, ReplaySafe also interprets `merge`, `delete+insert`, `insert_overwrite`, and `microbatch` strategies. ReplaySafe does not infer safety from destination names.
 
 ## RS003 - Target-derived unsafe watermark
 
@@ -33,4 +33,3 @@ Disabled by default. When enabled, flags an obvious HTTP POST inside a staticall
 ## RS017 - Non-deterministic deduplication
 
 Flags only proven survivor selection (`ROW_NUMBER` or `RANK`, partitioned by key and filtered to 1) without `ORDER BY`. An ordered window passes; v0.1 does not guess that a present ordering has ties.
-

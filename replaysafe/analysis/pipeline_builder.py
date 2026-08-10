@@ -7,12 +7,14 @@ from dataclasses import replace
 
 from replaysafe.diagnostics import Diagnostic
 from replaysafe.ir import (
+    DataAsset,
     ExternalSideEffect,
     PipelineModel,
     SourceLocation,
     StatementSemantics,
     TaskSemantics,
     TransactionGroup,
+    WriteMode,
     WriteOperation,
 )
 from replaysafe.parsers import DbtNode, ExtractedSql, PythonAnalyzer, SqlAnalyzer
@@ -57,6 +59,34 @@ def build_sql_model(
 
     location = SourceLocation(file, 1)
     parsed = SqlAnalyzer().analyze(text, dialect, location)
+    statements = parsed.statements
+    has_explicit_write = any(
+        isinstance(operation, WriteOperation)
+        for statement in statements
+        for operation in statement.operations
+    )
+    dbt_write = (
+        None
+        if has_explicit_write
+        else _dbt_write(dbt_node, file, statements[-1].index if statements else 0, dialect)
+    )
+    if dbt_write is not None:
+        if statements:
+            last = statements[-1]
+            statements = (
+                *statements[:-1],
+                replace(last, operations=(*last.operations, dbt_write)),
+            )
+        else:
+            statements = (
+                StatementSemantics(
+                    0,
+                    "dbt_model",
+                    dbt_write.evidence,
+                    location,
+                    operations=(dbt_write,),
+                ),
+            )
     task = _task_from_statements(
         task_id=dbt_node.name if dbt_node else None,
         retries=None,
@@ -67,18 +97,54 @@ def build_sql_model(
             if symbol in text
         ),
         location=location,
-        statements=parsed.statements,
+        statements=statements,
         groups=parsed.transaction_groups,
     )
     model = PipelineModel(
-        file,
-        (task,),
-        dbt_node.name if dbt_node else None,
-        dbt_node.dependencies if dbt_node else (),
-        dbt_node.unique_key if dbt_node else (),
-        dbt_node.materialization if dbt_node else None,
+        file=file,
+        tasks=(task,),
+        model_name=dbt_node.name if dbt_node else None,
+        dependencies=dbt_node.dependencies if dbt_node else (),
+        unique_key=dbt_node.unique_key if dbt_node else (),
+        materialization=dbt_node.materialization if dbt_node else None,
+        dbt_unique_id=dbt_node.unique_id if dbt_node else None,
+        relation_name=dbt_node.relation_name if dbt_node else None,
+        dependency_relations=dbt_node.dependency_relations if dbt_node else (),
     )
     return model, parsed.diagnostics
+
+
+def _dbt_write(
+    node: DbtNode | None, file: str, statement_index: int, dialect: str
+) -> WriteOperation | None:
+    if node is None or node.materialization is None:
+        return None
+    materialization = node.materialization.lower()
+    strategy = (node.incremental_strategy or "").lower()
+    if materialization == "incremental":
+        if strategy in {"insert_overwrite", "microbatch"}:
+            mode = WriteMode.OVERWRITE
+        elif strategy in {"merge", "delete+insert"} and node.unique_key:
+            mode = WriteMode.UPSERT
+        else:
+            mode = WriteMode.APPEND
+    elif materialization in {"table", "view"}:
+        mode = WriteMode.OVERWRITE
+    else:
+        return None
+    target = node.relation_name or node.name
+    evidence = f"dbt {materialization} model writes {target}"
+    return WriteOperation(
+        DataAsset(target.lower(), "table", None if dialect == "auto" else dialect),
+        mode,
+        node.unique_key,
+        (),
+        None,
+        SourceLocation(file, 1),
+        statement_index,
+        mode == WriteMode.UPSERT,
+        evidence,
+    )
 
 
 def _reindex_statement(statement: StatementSemantics, index: int) -> StatementSemantics:

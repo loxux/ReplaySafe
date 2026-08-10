@@ -162,6 +162,9 @@ class PipelineModel:
     dependencies: tuple[str, ...] = ()
     unique_key: tuple[str, ...] = ()
     materialization: str | None = None
+    dbt_unique_id: str | None = None
+    relation_name: str | None = None
+    dependency_relations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

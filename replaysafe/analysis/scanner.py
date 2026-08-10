@@ -46,6 +46,14 @@ def _dbt_node(manifest: DbtManifest | None, relative_path: str) -> DbtNode | Non
     return matches[0] if len(matches) == 1 else None
 
 
+def _manifest_path(root: Path, explicit: Path | None) -> Path | None:
+    if explicit is not None:
+        return explicit
+    project_root = root.parent if root.is_file() else root
+    candidate = project_root / "target" / "manifest.json"
+    return candidate if candidate.is_file() else None
+
+
 def _read_source(path: Path, relative: str) -> tuple[str | None, Diagnostic | None]:
     try:
         size = path.stat().st_size
@@ -84,8 +92,9 @@ def scan_repository(
     discovery = discover_files(root, active_config.exclude + extra_excludes)
     diagnostics: list[Diagnostic] = list(discovery.diagnostics)
     manifest: DbtManifest | None = None
-    if dbt_manifest is not None:
-        manifest = load_manifest(dbt_manifest)
+    resolved_manifest = _manifest_path(root, dbt_manifest)
+    if resolved_manifest is not None:
+        manifest = load_manifest(resolved_manifest)
         diagnostics.extend(manifest.diagnostics)
     models: list[PipelineModel] = []
     sources: dict[str, str] = {}
@@ -97,11 +106,17 @@ def scan_repository(
         assert source is not None
         sources[item.relative_path] = source
         if item.absolute_path.suffix.lower() == ".sql":
+            dbt_node = _dbt_node(manifest, item.relative_path)
+            analysis_source = (
+                dbt_node.compiled_sql
+                if dbt_node is not None and dbt_node.compiled_sql is not None
+                else source
+            )
             model, parser_diagnostics = build_sql_model(
-                source,
+                analysis_source,
                 item.relative_path,
                 active_config.dialect,
-                _dbt_node(manifest, item.relative_path),
+                dbt_node,
             )
         else:
             model, parser_diagnostics = build_python_model(

@@ -60,7 +60,12 @@ def _render(result: ScanResult, output_format: str) -> str:
 @click.option(
     "excludes", "--exclude", multiple=True, help="Additional comma-separated glob excludes."
 )
-@click.option("dbt_manifest", "--dbt-manifest", type=click.Path(path_type=Path))
+@click.option(
+    "dbt_manifest",
+    "--dbt-manifest",
+    type=click.Path(path_type=Path),
+    help="Path to dbt manifest.json; defaults to PATH/target/manifest.json when present.",
+)
 @click.option(
     "airflow_mode", "--airflow-mode", type=click.Choice(["auto", "static", "off"]), default="auto"
 )

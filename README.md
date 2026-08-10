@@ -47,9 +47,29 @@ ReplaySafe prefers no finding over a speculative blocking result. See [rule boun
 | PostgreSQL, Snowflake, BigQuery, StarRocks | SQLGlot parsing with explicit dialect selection |
 | Python | Literal/f-string/local-variable SQL passed to known execution methods |
 | Airflow | Static `@dag`, `@task`, common SQL operators, retries, task IDs, logical-time Jinja |
-| dbt | Optional read-only `manifest.json` enrichment; dbt is not invoked |
+| dbt | Automatic manifest discovery, compiled SQL analysis, relations, dependencies, materializations, incremental strategies, and unique keys |
 
-Dynamic Python assembly, arbitrary symbolic execution, runtime warehouse metadata, lineage catalogs, Spark plans, and generic data-quality checks are intentionally outside v0.1.
+Dynamic Python assembly, arbitrary symbolic execution, runtime warehouse metadata, broad lineage catalogs, Spark plans, and generic data-quality checks remain intentionally outside the current scope.
+
+## dbt projects
+
+Scan a dbt project from its root:
+
+```bash
+replaysafe scan path/to/dbt-project
+```
+
+When `target/manifest.json` exists, ReplaySafe discovers it automatically and reads it without invoking dbt. Current `compiled_code` and legacy `compiled_sql` fields are preferred over unexpanded model templates. ReplaySafe maps findings back to `original_file_path` and carries model identity, physical relation, `ref`/`source` dependencies, materialization, incremental strategy, and `unique_key` into the semantic model.
+
+Incremental models produce an explicit destination-write semantic: append without a key remains visible to RS002, `merge`/`delete+insert` with a key is treated as an upsert, and `insert_overwrite`/`microbatch` is treated as overwrite. Generated `target`, `logs`, and `dbt_packages` trees are excluded from ordinary source discovery to avoid duplicate findings.
+
+For a nonstandard artifact location, pass it explicitly:
+
+```bash
+replaysafe scan . --dbt-manifest build/dbt/manifest.json
+```
+
+Without a manifest, dbt-style SQL is still scanned with non-executing Jinja placeholder handling, but macro-expanded relations and adapter materialization behavior are unavailable.
 
 ## Configuration and suppressions
 

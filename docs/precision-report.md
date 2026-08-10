@@ -38,8 +38,7 @@ Assumption: the window alias is proven to be filtered to survivor position 1. Sa
 - SQLGlot dialect coverage is bounded by the tested constructs and versions in `pyproject.toml`.
 - Transaction wrappers implemented in custom Python libraries are not inferred.
 - Runtime schema constraints and warehouse-specific atomicity are unknown unless represented in config/dbt metadata.
-- dbt macro expansion is not executed; simple Jinja placeholders are tolerated only for surrounding SQL parsing.
+- ReplaySafe never executes dbt macro expansion. When `target/manifest.json` is available it analyzes dbt's already-generated compiled SQL; otherwise only non-executing Jinja placeholder handling is available. Compiled macro expansion can make reported source line locations approximate.
 - RS014 remains disabled because generic external-call precision needs a larger corpus.
 
 Overlapping RS003/RS008 causes are emitted as RS003 only; fingerprints omit raw line numbers so unrelated line movement does not create a new identity.
-
