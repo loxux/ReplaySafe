@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/replaysafe.svg)](https://pypi.org/project/replaysafe/)
 [![Python](https://img.shields.io/pypi/pyversions/replaysafe.svg)](https://pypi.org/project/replaysafe/)
 
-ReplaySafe is a deterministic static analyzer for data pipelines that cannot safely retry, replay, backfill, partially fail, or run concurrently. The v0.1 scanner focuses on SQL plus statically extractable Python/Airflow and dbt-style SQL. It runs locally and never imports or executes scanned repository code.
+ReplaySafe is a deterministic static analyzer for data pipelines that cannot safely retry, replay, backfill, partially fail, or run concurrently. The scanner covers SQL, statically extractable Python/Airflow, and manifest-backed dbt projects. It runs locally and never imports or executes scanned repository code.
 
 ## Five-minute quick start
 
@@ -24,7 +24,7 @@ replaysafe explain RS003
 replaysafe init
 ```
 
-## What v0.1 checks
+## What ReplaySafe checks
 
 | Rule | Default | Proven pattern |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ ReplaySafe prefers no finding over a speculative blocking result. See [rule boun
 
 ## Supported inputs
 
-| Input | v0.1 support |
+| Input | Support |
 | --- | --- |
 | Standalone SQL | Multi-statement parsing and recovery semantics |
 | PostgreSQL, Snowflake, BigQuery, StarRocks | SQLGlot parsing with explicit dialect selection |
